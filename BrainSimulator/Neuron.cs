@@ -170,7 +170,6 @@ namespace BrainSimulator
         }
         public Synapse FindSynapseFrom(int fromNeuron)
         {
-            Synapse s;
             for (int i = 0; i < synapsesFrom.Count; i++)
             {
                 if (synapsesFrom[i].TargetNeuron == fromNeuron)
