@@ -18,12 +18,12 @@ namespace BrainSimulator.Modules
     {
         public long immediateMemory = 2; //items are more-or-less simultaneous
         long shortTermMemory = 10; //items are close in time
-        public override string ShortDescription => "A Knowledge Graph KB module expanded with a neuron arrays for intputs and outputs.";
+        public override string ShortDescription => "A Knowledge Graph KB module expanded with neuron arrays for inputs and outputs.";
         public override string LongDescription => "This is like a KB module but expanded to be accessible via neuron firings instead of just programmatically. " + base.LongDescription;
 
         int EventCount = 0; //sequence # for labelling Event entries
         int phraseCount = 0; //sequence # for labelling phrases
-        int wordCount = 0; //sequence # for labelling wordss
+        int wordCount = 0; //sequence # for labelling words
         List<Thing> activeSequences = new List<Thing>();
         int firstThing; //this temporarily allows embedding of a few command neurons in the KB neuron array
 
@@ -258,7 +258,7 @@ namespace BrainSimulator.Modules
 
             t.useCount++;
         }
-        private ModuleView GetOutputModue()
+        private ModuleView GetOutputModule()
         {
             return theNeuronArray.FindAreaByLabel("KBOut");
         }
@@ -271,7 +271,7 @@ namespace BrainSimulator.Modules
             ModuleView naModule = na;
             if (!firedInput)
             {
-                naModule = GetOutputModue();
+                naModule = GetOutputModule();
                 if (naModule == null) return false;
             }
             Neuron n = naModule.GetNeuronAt(i);

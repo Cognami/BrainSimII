@@ -179,7 +179,7 @@ namespace BrainSimulator
         }
 
         bool alreadyInQueue = false;
-        public void Fire1(int taskID, ref int nextQueuePtr,int[]nextQueue)
+        public void Fire1(int taskID, ref int nextQueuePtr,int[] nextQueue)
         {
             NeuronArray theNeuronArray = MainWindow.theNeuronArray;
             Neuron[] neuronArray = theNeuronArray.neuronArray;
