@@ -59,7 +59,7 @@ namespace BrainSimulator
 
         //for autorepeat on the zoom in-out buttons
         DispatcherTimer zoomInOutTimer;
-        int zoomAomunt = 0;
+        int zoomAmount = 0;
 
 
 
@@ -887,8 +887,8 @@ namespace BrainSimulator
             zoomInOutTimer.Interval = new TimeSpan(0, 0, 0, 0, 250);
             zoomInOutTimer.Tick += ZoomInOutTimer_Tick;
             CaptureMouse();
-            zoomAomunt = amount;
-            theNeuronArrayView.Zoom(zoomAomunt);
+            zoomAmount = amount;
+            theNeuronArrayView.Zoom(zoomAmount);
             zoomInOutTimer.Start();
         }
 
@@ -896,7 +896,7 @@ namespace BrainSimulator
         {
             if (Mouse.LeftButton == MouseButtonState.Pressed)
             {
-                theNeuronArrayView.Zoom(zoomAomunt);
+                theNeuronArrayView.Zoom(zoomAmount);
             }
             else
             {
