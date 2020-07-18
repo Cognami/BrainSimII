@@ -24,10 +24,12 @@ namespace BrainSimulator
         public Synapse(int targetNeuronIn, float weightIn)
         {
             targetNeuron = targetNeuronIn;
-            N = MainWindow.theNeuronArray.neuronArray[targetNeuron];
+            N = MainWindow.theNeuronArray.GetNeuron(targetNeuron);
             Weight = weightIn;
         }
         private float weight;
+        public  bool IsHebbian = false;
+
 
         [XmlIgnore]
         public Neuron N; //this is used by the engine
@@ -38,7 +40,8 @@ namespace BrainSimulator
         public float Weight
         {
             get => weight;
-            set { weight = value; IWeight = (int)(weight * Neuron.threshold); }
+            set {
+                weight = value; IWeight = (int)(weight * Neuron.threshold); }
         }
         //public int IWeight
         //{

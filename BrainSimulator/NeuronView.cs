@@ -46,7 +46,7 @@ namespace BrainSimulator
                 if (col % 2 != 0) return null;
             }
 
-            Neuron n = MainWindow.theNeuronArray.neuronArray[i];
+            Neuron n = MainWindow.theNeuronArray.GetNeuron(i);
             Point p = dp.pointFromNeuron(i);
 
             //if (p.X < -dp.NeuronDisplaySize) return null;
@@ -155,7 +155,7 @@ namespace BrainSimulator
             {
                 sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 3, 3) };
                 sp.Children.Add(new Label { Content = "Leak Rate: ", Padding = new Thickness(0) });
-                sp.Children.Add(new TextBox { Text = n.LeakRate.ToString("f2"), Width = 60, Name = "LeakRate", VerticalAlignment = VerticalAlignment.Center });
+                sp.Children.Add(new TextBox { Text = n.LeakRate.ToString("f4"), Width = 60, Name = "LeakRate", VerticalAlignment = VerticalAlignment.Center });
                 cm.Items.Add(sp);
             }
 
@@ -216,6 +216,29 @@ namespace BrainSimulator
             cbHistory.Checked += CbHistory_Checked;
             cbHistory.Unchecked += CbHistory_Checked;
             cm.Items.Add(cbHistory);
+
+            mi = new MenuItem();
+            mi.Header = "Synapses";
+            mi.Click += Mi_Click;
+            if (n.synapses == null)
+            {
+                n.synapses = new List<Synapse>();
+            }
+            foreach (Synapse s in n.synapses)
+                mi.Items.Add(new MenuItem() { Header = s.targetNeuron + " " + s.Weight });
+
+            cm.Items.Add(mi);
+
+            mi = new MenuItem();
+            mi.Header = "Synapses In";
+            mi.Click += Mi_Click;
+            if (n.synapsesFrom == null)
+            {
+                n.synapsesFrom = new List<Synapse>();
+            }
+            foreach (Synapse s in n.synapsesFrom)
+                mi.Items.Add(new MenuItem() { Header = s.targetNeuron + " " + s.Weight });
+            cm.Items.Add(mi);
         }
 
         private static void CbHistory_Checked(object sender, RoutedEventArgs e)
@@ -240,7 +263,7 @@ namespace BrainSimulator
             {
 
                 int neuronID = (int)cm.GetValue(NeuronIDProperty);
-                Neuron n = MainWindow.theNeuronArray.neuronArray[neuronID];
+                Neuron n = MainWindow.theNeuronArray.GetNeuron(neuronID);
                 Control cc = Utils.FindByName(cm, "Label");
                 if (cc is TextBox tb)
                     n.Label = tb.Text;
@@ -315,7 +338,7 @@ namespace BrainSimulator
             int neuronID = (int)cm.GetValue(NeuronIDProperty);
             ListBoxItem lbi = (ListBoxItem)cb.SelectedItem;
             Neuron.modelType nm = (Neuron.modelType)System.Enum.Parse(typeof(Neuron.modelType), lbi.Content.ToString());
-            Neuron n = MainWindow.theNeuronArray.neuronArray[neuronID];
+            Neuron n = MainWindow.theNeuronArray.GetNeuron(neuronID);
             n.Model = nm;
             SetModelAndLeakrate(n);
             cm.IsOpen = false;
@@ -355,7 +378,7 @@ namespace BrainSimulator
                 cm = mi2.Parent as ContextMenu;
             }
             int i = (int)cm.GetValue(NeuronIDProperty);
-            Neuron n = MainWindow.theNeuronArray.neuronArray[i];
+            Neuron n = MainWindow.theNeuronArray.GetNeuron(i);
             if ((string)mi.Header == "Always Fire")
             {
                 if (n.FindSynapse(i) == null)
@@ -400,7 +423,7 @@ namespace BrainSimulator
             ContextMenu cm = tb.Parent as ContextMenu;
             if (cm == null) return;
             int i = (int)cm.GetValue(NeuronIDProperty);
-            Neuron n = MainWindow.theNeuronArray.neuronArray[i];
+            Neuron n = MainWindow.theNeuronArray.GetNeuron(i);
             n.Label = tb.Text;
         }
 

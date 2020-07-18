@@ -103,12 +103,17 @@ namespace BrainSimulator
             cm.Items.Add(mi);
 
             mi = new MenuItem();
+            mi.Header = ".9";
+            mi.Click += ANDSynapse_Click;
+            cm.Items.Add(mi);
+
+            mi = new MenuItem();
             mi.Header = ".5";
             mi.Click += ANDSynapse_Click;
             cm.Items.Add(mi);
 
             mi = new MenuItem();
-            mi.Header = ".33";
+            mi.Header = ".34";
             mi.Click += ANDSynapse_Click;
             cm.Items.Add(mi);
 
@@ -132,7 +137,27 @@ namespace BrainSimulator
             tb.Width = 200;
             tb.TextChanged += Tb_TextChanged;
             cm.Items.Add(tb);
-            cm.Closed += Cm_Closed;
+            CheckBox cbHebbian = new CheckBox
+            {
+                IsChecked = s.IsHebbian,
+                Content = "Hebbian Learning",
+                Name = "Hebbian",
+            };
+            cbHebbian.Checked += cbHebbianChecked;
+            cbHebbian.Unchecked += cbHebbianChecked;
+            cm.Items.Add(cbHebbian);
+        }
+
+        private static void cbHebbianChecked(object sender, RoutedEventArgs e)
+        {
+            CheckBox cb = sender as CheckBox;
+            ContextMenu cm = cb.Parent as ContextMenu;
+            cm.IsOpen = false;
+            CheckBox cbHebbian = (CheckBox)Utils.FindByName(cm, "Hebbian");
+            Synapse s = MainWindow.theNeuronArray.GetNeuron((int)cm.GetValue(SourceIDProperty)).
+                FindSynapse((int)cm.GetValue(TargetIDProperty));
+            if (s != null)
+                s.IsHebbian = (bool)cb.IsChecked;
         }
 
         private static void Cm_Closed(object sender, RoutedEventArgs e)
@@ -149,7 +174,7 @@ namespace BrainSimulator
             float.TryParse(tb.Text, out newWeight);
             if (newWeight == -20) return;
             theNeuronArrayView.lastSynapseWeight = newWeight;
-            Neuron n = MainWindow.theNeuronArray.neuronArray[(int)cm.GetValue(SourceIDProperty)];
+            Neuron n = MainWindow.theNeuronArray.GetNeuron((int)cm.GetValue(SourceIDProperty));
             n.AddSynapse((int)cm.GetValue(TargetIDProperty), newWeight, MainWindow.theNeuronArray,true);
         }
 
@@ -184,17 +209,8 @@ namespace BrainSimulator
             MenuItem mi = (MenuItem)sender;
             ContextMenu cm = mi.Parent as ContextMenu;
             float weight = 0;
-            if ((string)mi.Header == "1")
-                weight = 1.0f;
-            if ((string)mi.Header == ".5")
-                weight = 0.5f;
-            if ((string)mi.Header == ".33")
-                weight = 0.33f;
-            if ((string)mi.Header == ".25")
-                weight = 0.25f;
-            if ((string)mi.Header == "-1")
-                weight = -1f;
-            MainWindow.theNeuronArray.neuronArray[(int)cm.GetValue(SourceIDProperty)].
+            float.TryParse((string)mi.Header, out weight);
+            MainWindow.theNeuronArray.GetNeuron((int)cm.GetValue(SourceIDProperty)).
                 AddSynapse((int)cm.GetValue(TargetIDProperty), weight, MainWindow.theNeuronArray,true);
             theNeuronArrayView.lastSynapseWeight = weight;
             MainWindow.Update();
@@ -204,8 +220,7 @@ namespace BrainSimulator
         {
             MenuItem mi = (MenuItem)sender;
             ContextMenu cm = mi.Parent as ContextMenu;
-            string[] s = mi.Name.Split('_');
-            MainWindow.theNeuronArray.neuronArray[(int)cm.GetValue(SourceIDProperty)].DeleteSynapse((int)cm.GetValue(TargetIDProperty));
+            MainWindow.theNeuronArray.GetNeuron((int)cm.GetValue(SourceIDProperty)).DeleteSynapse((int)cm.GetValue(TargetIDProperty));
             MainWindow.Update();
         }
 

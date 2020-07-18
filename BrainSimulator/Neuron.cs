@@ -9,13 +9,13 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Xml.Serialization;
+using static System.Math;
+using System.Runtime.CompilerServices;
 
 namespace BrainSimulator
 {
     public class Neuron
     {
-
-
         public enum modelType { Std, Color, FloatValue, LIF, Random };
 
         //this is only used in NeuronView but is here so you can add the tooltip when you add a neuron type and 
@@ -34,7 +34,21 @@ namespace BrainSimulator
         public string Label { get { return label; } set { label = value; } }
         private bool keepHistory = false;
 
-        public Neuron() { Model = modelType.Std; }
+        public Neuron()
+        {
+            synapses = new List<Synapse>();
+            synapsesFrom = new List<Synapse>();
+            Model = modelType.Std;
+        }
+        public Neuron(bool allocateSynapses = false)
+        {
+            if (allocateSynapses)
+            {
+                synapses = new List<Synapse>();
+                synapsesFrom = new List<Synapse>();
+            }
+            Model = modelType.Std;
+        }
         public Neuron(int id1, modelType t = modelType.Std)
         {
             Id = id1;
@@ -42,9 +56,9 @@ namespace BrainSimulator
         }
 
         [XmlIgnore]
-        public static readonly int threshold = 10000;
+        public const int threshold = 10000;
         [XmlIgnore]
-        public static readonly float scaleFactor = (float)threshold;
+        public const float scaleFactor = (float)threshold;
 
         private long lastFired = 0;
 
@@ -65,17 +79,23 @@ namespace BrainSimulator
         private int lastCharge = 0;
         public float LastCharge { get { return (float)lastCharge / scaleFactor; } set { lastCharge = (int)(value * scaleFactor); } }
 
+        bool alreadyInQueue = false; //used by the queue-based engine 
+
+
         //get/set last charge as raw integer
         public int LastChargeInt { get { return lastCharge; } set { lastCharge = value; } }
 
         //This is the way to set up a list so it saves and loads properly from an XML file
-        internal List<Synapse> synapses = new List<Synapse>();
-        internal List<Synapse> synapsesFrom = new List<Synapse>();
+        internal List<Synapse> synapses;// = new List<Synapse>();
+        internal List<Synapse> synapsesFrom;// = new List<Synapse>();
         public List<Synapse> Synapses { get { return synapses; } }
+        [XmlIgnore]
         public List<Synapse> SynapsesFrom { get { return synapsesFrom; } }
 
-        private long nextFiring = 0; //used only by random neurons
-        private Random rand = new Random();
+        //used only by random neurons
+        private long nextFiring = 0;
+        [ThreadStatic]
+        static Random rand = new Random();
 
         public float LeakRate = 0.1f; //used only by LIF model
         public bool KeepHistory { get => keepHistory; set => keepHistory = value; }
@@ -88,7 +108,7 @@ namespace BrainSimulator
         //a neuron is defined as in use if it has any synapses connected from/to it or it has a label
         public bool InUse()
         {
-            return (synapses.Count != 0 || synapsesFrom.Count != 0 || Label != "");
+            return ((synapses != null && synapses.Count != 0) || (synapsesFrom != null && synapsesFrom.Count != 0) || Label != "");
         }
 
         public void Reset()
@@ -98,14 +118,16 @@ namespace BrainSimulator
             SetValue(0);
         }
 
-        public void AddSynapse(int targetNeuron, float weight)
+        public Synapse AddSynapse(int targetNeuron, float weight)
         {
-            AddSynapse(targetNeuron, weight, null, false);
+            return AddSynapse(targetNeuron, weight, null, false);
         }
-        public void AddSynapse(int targetNeuron, float weight, NeuronArray theNeuronArray, bool addUndoInfo)
+        public Synapse AddSynapse(int targetNeuron, float weight, NeuronArray theNeuronArray, bool addUndoInfo)
         {
+
             if (theNeuronArray == null) theNeuronArray = MainWindow.theNeuronArray;
-            if (targetNeuron > theNeuronArray.arraySize) return;
+            if (targetNeuron > theNeuronArray.arraySize)
+                return null;
             Synapse s = FindSynapse(targetNeuron);
             if (s == null)
             {
@@ -121,55 +143,68 @@ namespace BrainSimulator
                 s.Weight = weight;
             }
             //keep a list of synapses pointing to this one
-            Neuron n = theNeuronArray.neuronArray[targetNeuron];
-            lock (n.synapsesFrom)
+            Neuron n = theNeuronArray.GetNeuron(targetNeuron);
+            lock (n)
             {
-                s = n.FindSynapseFrom(Id);
-                if (s == null)
+                if (n.synapsesFrom == null) n.synapsesFrom = new List<Synapse>();
+                Synapse s1 = n.FindSynapseFrom(Id);
+                if (s1 == null)
                 {
-                    s = new Synapse(Id, weight);
-                    n.synapsesFrom.Add(s);
+                    s1 = new Synapse(Id, weight);
+                    n.synapsesFrom.Add(s1);
                 }
                 else
                 {
-                    s.Weight = weight;
+                    s1.Weight = weight;
                 }
             }
+            return s;
         }
         public void DeleteAllSynapes()
         {
             //delete synapses out
-            foreach (Synapse s in Synapses)
+            if (Synapses != null)
             {
-                Neuron n = MainWindow.theNeuronArray.neuronArray[s.TargetNeuron];
-                n.synapsesFrom.Remove(n.FindSynapseFrom(Id));
+                foreach (Synapse s in Synapses)
+                {
+                    Neuron n = MainWindow.theNeuronArray.GetNeuron(s.TargetNeuron);
+                    n.synapsesFrom.Remove(n.FindSynapseFrom(Id));
+                }
+                synapses.Clear();
             }
-            synapses.Clear();
-
             //delete synapses in
             //should delete the synapses at the source
-            foreach (Synapse s in SynapsesFrom)
+            if (synapsesFrom != null)
             {
-                Neuron nTarget = MainWindow.theNeuronArray.neuronArray[s.TargetNeuron];
-                nTarget.synapses.Remove(nTarget.FindSynapse(Id));
+                foreach (Synapse s in SynapsesFrom)
+                {
+                    Neuron nTarget = MainWindow.theNeuronArray.GetNeuron(s.TargetNeuron);
+                    nTarget.synapses.Remove(nTarget.FindSynapse(Id));
+                }
+                synapsesFrom.Clear();
             }
-            synapsesFrom.Clear();
         }
 
+        public override string ToString()
+        {
+            return "n" + Id;
+        }
         public void DeleteSynapse(int targetNeuron)
         {
             synapses.Remove(FindSynapse(targetNeuron));
-            Neuron n = MainWindow.theNeuronArray.neuronArray[targetNeuron];
+            Neuron n = MainWindow.theNeuronArray.GetNeuron(targetNeuron);
             n.synapsesFrom.Remove(n.FindSynapseFrom(Id));
         }
 
         public Synapse FindSynapse(int targetNeuron)
         {
+            if (synapses == null) synapses = new List<Synapse>();
             Synapse s = synapses.Find(s1 => s1.TargetNeuron == targetNeuron);
             return s;
         }
         public Synapse FindSynapseFrom(int fromNeuron)
         {
+            if (synapsesFrom == null) synapsesFrom = new List<Synapse>();
             for (int i = 0; i < synapsesFrom.Count; i++)
             {
                 if (synapsesFrom[i].TargetNeuron == fromNeuron)
@@ -178,46 +213,79 @@ namespace BrainSimulator
             return null;
         }
 
-        bool alreadyInQueue = false;
-        public void Fire1(int taskID, ref int nextQueuePtr,int[] nextQueue)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Fire1(int taskID, List<int> nextQueue)
         {
             NeuronArray theNeuronArray = MainWindow.theNeuronArray;
             Neuron[] neuronArray = theNeuronArray.neuronArray;
-            if (currentCharge < threshold) return;
-           // Interlocked.Increment(ref MainWindow.theNeuronArray.fireCount);
+            if (lastCharge < threshold) return;
 
-            for (int i = 0; i < synapses.Count; i++)
-            {
-                Synapse s = synapses[i];
-                //s.N.currentCharge += s.IWeight;
-                int charge = Interlocked.Add(ref s.N.lastCharge, s.IWeight);
-                if (charge >= threshold && !s.N.alreadyInQueue)
+            //process all the synapses sourced by this neuron
+            if (synapses != null)
+                for (int i = 0; i < synapses.Count; i++)
                 {
-                    nextQueue[nextQueuePtr++] = s.N.Id;
-                    //theNeuronArray.AddToFiringQueue(s.N.Id, taskID);
-                    s.N.alreadyInQueue = true;
+                    Synapse s = synapses[i];
+                    Neuron n = s.N;
+                    //Interlocked.Add(ref s.N.currentCharge, s.IWeight);
+                    n.currentCharge += s.IWeight;
+
+                    //if the target neuron needs processing, add it to the firing queue
+                    if (!n.alreadyInQueue && (n.currentCharge >= threshold || n.currentCharge < 0))
+                    {
+                        nextQueue.Add(s.N.Id);
+                        n.alreadyInQueue = true;
+                    }
+                    if (s.IsHebbian)
+                    {
+                        if (s.N.LastChargeInt >= threshold)
+                        {
+                            //strengthen the synapse
+                            if (s.Weight < 1)
+                            {
+                                if (s.Weight == 0) s.Weight = .34f;
+                                if (s.Weight == .34f) s.Weight = .5f;
+                                if (s.Weight == .5f) s.Weight = 1f;
+                            }
+                        }
+                        else
+                        {
+                            //weaken the synapse
+                        }
+                    }
+
                 }
-                if (s.N.lastCharge < 0) s.N.lastCharge = 0;
-            }
-            currentCharge = 0;
         }
 
         //check for firing
-        public void Fire2(int taskID)
+        public void Fire2(int taskID, List<int> nextQueue)
         {
             alreadyInQueue = false;
             NeuronArray theNeuronArray = MainWindow.theNeuronArray;
-            //                case modelType.Std:
-            if (lastCharge < 0) lastCharge = 0;
-            currentCharge = lastCharge;
+            if (currentCharge < 0) currentCharge = 0;
+            lastCharge = currentCharge;
             if (lastCharge >= threshold)
             {
-                lastCharge = 0;
+                currentCharge = 0;
                 if (KeepHistory)
                     FiringHistory.AddFiring(Id, theNeuronArray.Generation);
                 LastFired = theNeuronArray.Generation;
+                nextQueue.Add(Id); //add yourself to the firing queue for next time
+                alreadyInQueue = true;
+            }
+            //handle charge reduction of LIF model
+            if (model == modelType.LIF)
+            {
+                if (currentCharge > 99)
+                {
+                    currentCharge = (int)(currentCharge * (1 - LeakRate));
+                }
+                else
+                    currentCharge = 0;
+                nextQueue.Add(Id); //alwayse keep LIF neurons on the queue
             }
         }
+
+
         //process the synapses
         public void Fire1()
         {
@@ -228,7 +296,11 @@ namespace BrainSimulator
                 case modelType.Random:
                     if (nextFiring == 0)
                     {
-                        nextFiring = theNeuronArray.Generation + rand.Next(10, 30);
+                        if (rand == null) rand = new Random();
+                        lock (rand)
+                        {
+                            nextFiring = theNeuronArray.Generation + rand.Next(10, 30);
+                        }
                     }
                     if (nextFiring == theNeuronArray.Generation)
                     {
@@ -241,16 +313,36 @@ namespace BrainSimulator
                 case modelType.Std:
                     if (lastCharge < threshold) return;
                     Interlocked.Add(ref theNeuronArray.fireCount, 1);
-                    foreach (Synapse s in synapses)
+                    if (synapses != null)
                     {
-                        Neuron n = theNeuronArray.neuronArray[s.TargetNeuron];
-                        Interlocked.Add(ref n.currentCharge, s.IWeight);
+                        foreach (Synapse s in synapses)
+                        {
+                            Neuron n = theNeuronArray.GetNeuron(s.TargetNeuron);
+                            Interlocked.Add(ref n.currentCharge, s.IWeight);
+                            if (s.IsHebbian)
+                            {
+                                if (n.LastChargeInt >= threshold)
+                                {
+                                    //strengthen the synapse
+                                    if (s.Weight < 1)
+                                    {
+                                        if (s.Weight == 0) s.Weight = .34f;
+                                        if (s.Weight == .34f) s.Weight = .5f;
+                                        if (s.Weight == .5f) s.Weight = 1f;
+                                    }
+                                }
+                                else
+                                {
+                                    //weaken the synapse
+                                }
+                            }
+                        }
                     }
                     break;
             }
         }
 
-        
+
         //check for firing
         public void Fire2()
         {
@@ -267,7 +359,7 @@ namespace BrainSimulator
                             FiringHistory.AddFiring(Id, theNeuronArray.Generation);
                         LastFired = theNeuronArray.Generation;
                     }
-                    if (currentCharge > 100)
+                    if (currentCharge > 99)
                     {
                         currentCharge = (int)(currentCharge * (1 - LeakRate));
                     }
@@ -295,9 +387,9 @@ namespace BrainSimulator
             int count = 0;
             int thisNeuron = -1;
             for (int i = 0; i < theNeuronArray.arraySize; i++)
-                if (theNeuronArray.neuronArray[i] == this)
+                if (theNeuronArray.GetNeuron(i) == this)
                     thisNeuron = i;
-            foreach (Neuron n in theNeuronArray.neuronArray)
+            foreach (Neuron n in theNeuronArray.Neurons())
                 foreach (Synapse s in n.synapses)
                     if (s.TargetNeuron == thisNeuron)
                         count++;
